@@ -43,6 +43,10 @@ say "Using PHP $PHP_VERSION"
 # ---------------------------------------------------------------- packages
 # The distribution's own PHP satisfies Laravel 12's "php": "^8.2", so there is
 # no third-party PPA to add — and none of them build reliably for ARM anyway.
+#
+# sqlite3 and gd are not used by the running shop. They are here so the test
+# suite can be run on the server: the tests use an in-memory SQLite database,
+# and UploadedFile::fake()->image() needs GD.
 say "Installing packages"
 export DEBIAN_FRONTEND=noninteractive
 apt-get install -y -qq \
@@ -50,7 +54,8 @@ apt-get install -y -qq \
     php${PHP_VERSION}-fpm php${PHP_VERSION}-cli \
     php${PHP_VERSION}-pgsql php${PHP_VERSION}-mbstring php${PHP_VERSION}-xml \
     php${PHP_VERSION}-curl php${PHP_VERSION}-bcmath php${PHP_VERSION}-zip \
-    php${PHP_VERSION}-intl
+    php${PHP_VERSION}-intl \
+    php${PHP_VERSION}-sqlite3 php${PHP_VERSION}-gd
 
 if ! command -v composer >/dev/null; then
     say "Installing Composer"
