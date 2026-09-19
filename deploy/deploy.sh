@@ -65,7 +65,15 @@ say "Live"
 as_www php artisan up
 trap - EXIT
 
-curl -fsS -o /dev/null -w 'health check: %{http_code}\n' http://127.0.0.1/up || {
+# Checked over the loopback so it does not depend on DNS, but with the site's
+# own Host header: once server_name names the domain, an unmatched host falls
+# through to certbot's redirect block and answers 404.
+HOSTNAME_FOR_CHECK=$(
+    grep -m1 '^APP_URL=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | sed -E 's#^https?://##; s#/.*##'
+)
+
+curl -fsS -o /dev/null -H "Host: ${HOSTNAME_FOR_CHECK:-localhost}" \
+     -w 'health check: %{http_code}\n' http://127.0.0.1/up || {
     echo "Health check failed — check storage/logs/laravel.log" >&2
     exit 1
 }
