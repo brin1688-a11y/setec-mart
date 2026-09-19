@@ -71,6 +71,7 @@ return [
         'total' => 'Total',
         'place_order' => 'Place Order',
         'choose_province_hint' => 'Choose a province to see the delivery charge.',
+        'choose_payment_hint' => 'Choose how you would like to pay.',
         'add_more_free' => 'Add :amount more for free delivery.',
         'choose' => 'Choose...',
         'discount' => 'Discount',

@@ -331,4 +331,40 @@ class CambodianCheckoutTest extends TestCase
         $this->assertNull(Cambodia::shipsFreeAt('Siem Reap'));
         $this->assertNull(Cambodia::shipsFreeAt('Kandal'));
     }
+
+    public function test_no_payment_method_is_chosen_for_the_customer(): void
+    {
+        // The shop used to arrive with Cash on Delivery already ticked, so an
+        // order could be placed without anyone deciding how to pay for it.
+        $html = $this->actingAs($this->user)->get('/checkout')->assertOk()->getContent();
+
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($html);
+
+        $radios = (new \DOMXPath($dom))->query('//input[@name="payment_method"]');
+
+        $this->assertSame(2, $radios->length, 'Expected the cash and KHQR options.');
+
+        foreach ($radios as $radio) {
+            $this->assertFalse(
+                $radio->hasAttribute('checked'),
+                $radio->getAttribute('value').' must not be pre-selected.'
+            );
+
+            // This is what refuses the submission when JavaScript is off.
+            $this->assertTrue($radio->hasAttribute('required'));
+        }
+    }
+
+    public function test_an_order_without_a_payment_method_is_refused(): void
+    {
+        $payload = $this->payload();
+        unset($payload['payment_method']);
+
+        $this->actingAs($this->user)
+            ->post('/checkout', $payload)
+            ->assertSessionHasErrors('payment_method');
+
+        $this->assertSame(0, Order::count());
+    }
 }

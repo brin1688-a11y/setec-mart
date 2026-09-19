@@ -209,7 +209,8 @@
                             name="payment_method"
                             value="cod"
                             id="cod"
-                            {{ old('payment_method', 'cod') == 'cod' ? 'checked' : '' }}
+                            required
+                            {{ old('payment_method') == 'cod' ? 'checked' : '' }}
                         >
                         <label class="form-check-label w-100" for="cod">
                             <span class="d-flex align-items-center gap-2">
@@ -229,6 +230,7 @@
                             name="payment_method"
                             value="khqr"
                             id="khqr"
+                            required
                             {{ old('payment_method') == 'khqr' ? 'checked' : '' }}
                         >
                         <label class="form-check-label w-100" for="khqr">
@@ -361,6 +363,12 @@
                         @lang('site.checkout.place_order')
                     </button>
 
+                    {{-- Shown only while no payment method is chosen, so the
+                         disabled button never looks like a fault. --}}
+                    <p class="text-center small text-muted mt-2 mb-0 d-none" id="paymentHint">
+                        @lang('site.checkout.choose_payment_hint')
+                    </p>
+
                     <p class="text-muted small text-center mt-3 mb-0">
                         @lang('site.checkout.choose_province_hint')
                     </p>
@@ -448,6 +456,27 @@ document.addEventListener('DOMContentLoaded', function () {
 
     select.addEventListener('change', update);
     update();
+
+    // ---- Paying for it is a choice, not a default ------------------------
+    //
+    // Nothing is pre-selected, so the customer has to say how they want to
+    // pay rather than discovering afterwards that the shop picked for them.
+    // The radios carry `required`, which is what stops a submission when
+    // JavaScript is off; this only makes the state visible beforehand.
+
+    const payRadios = document.querySelectorAll('input[name="payment_method"]');
+    const placeOrder = document.getElementById('placeOrderBtn');
+    const payHint = document.getElementById('paymentHint');
+
+    function reflectPayment() {
+        const chosen = [...payRadios].some(r => r.checked);
+
+        placeOrder.disabled = !chosen;
+        if (payHint) payHint.classList.toggle('d-none', chosen);
+    }
+
+    payRadios.forEach(r => r.addEventListener('change', reflectPayment));
+    reflectPayment();
 
     // ---- Coupons, without throwing away the form ------------------------
     //
