@@ -1,7 +1,14 @@
 # Deploying Setec Mart
 
-Target: an **AWS EC2** instance (Ubuntu 24.04) in **Singapore
-(`ap-southeast-1`)**, with **Supabase** (PostgreSQL) as the database.
+Target: an **AWS EC2** instance (Ubuntu 24.04 or 26.04) in **Singapore
+(`ap-southeast-1`)**, with **PostgreSQL on the same instance**.
+
+Supabase was the original plan and works, but it needs outbound 5432, which
+this security group blocks. Postgres on the box removes the dependency
+entirely, is faster per query (this app keeps sessions, cache and the queue in
+the database, so every page is several round trips), and never pauses the way a
+free Supabase project does after a week idle. The same `pg_dump` file loads into
+either, so the choice is reversible.
 
 Why a VM and not a serverless host: the shop writes product photos to a local
 disk (`storage/app/public/products`) and runs `queue:work` as a long-lived
@@ -238,9 +245,21 @@ reproducible from git plus the database.
 cd /var/www/setec-mart
 sudo bash deploy/deploy.sh
 
+sudo sed -i "s|server_name _;|server_name example.com www.example.com;|"      /etc/nginx/sites-available/setec-mart
+sudo nginx -t && sudo systemctl reload nginx
+
 sudo apt install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d shop.example.com
+sudo certbot --nginx -d example.com -d www.example.com --redirect
 ```
+
+certbot rewrites `/etc/nginx/sites-available/setec-mart` in place. From then on
+`setup-server.sh` leaves that file alone — regenerating it from the template
+would drop the certificate and put the site back on plain HTTP. To rebuild it
+deliberately, pass `FORCE_NGINX=1` and run certbot again afterwards.
+
+Once `server_name` names the domain, the bare IP stops serving the shop: an
+unmatched `Host` falls through to certbot's redirect block, which answers 404.
+That is correct behaviour, not a fault — reach the site by name.
 
 Point the domain's A record at the **Elastic IP** before running certbot, and
 wait for DNS to propagate — certbot fails if the name does not resolve yet.

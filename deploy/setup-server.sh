@@ -121,13 +121,23 @@ memory_limit = 256M
 INI
 
 # ------------------------------------------------------------------- nginx
-say "Installing the nginx site"
-sed -e "s|{{DOMAIN}}|${DOMAIN}|g" \
-    -e "s|{{APP_DIR}}|${APP_DIR}|g" \
-    -e "s|{{PHP_VERSION}}|${PHP_VERSION}|g" \
-    "$APP_DIR/deploy/nginx.conf" > /etc/nginx/sites-available/setec-mart
+SITE=/etc/nginx/sites-available/setec-mart
 
-ln -sf /etc/nginx/sites-available/setec-mart /etc/nginx/sites-enabled/setec-mart
+# certbot edits this file in place to add the certificate and the HTTP
+# redirect. Regenerating it from the template would silently take the site
+# back to plain HTTP, so once certbot has been here the file is left alone.
+# FORCE_NGINX=1 overrides, and certbot must then be re-run.
+if [[ -f $SITE ]] && grep -q "managed by Certbot" "$SITE" && [[ ${FORCE_NGINX:-0} != 1 ]]; then
+    say "Keeping the existing nginx site (certbot has configured HTTPS on it)"
+else
+    say "Installing the nginx site"
+    sed -e "s|{{DOMAIN}}|${DOMAIN}|g" \
+        -e "s|{{APP_DIR}}|${APP_DIR}|g" \
+        -e "s|{{PHP_VERSION}}|${PHP_VERSION}|g" \
+        "$APP_DIR/deploy/nginx.conf" > "$SITE"
+fi
+
+ln -sf "$SITE" /etc/nginx/sites-enabled/setec-mart
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
 
