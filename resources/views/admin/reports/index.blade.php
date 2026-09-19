@@ -37,7 +37,10 @@
         </p>
     </div>
 
-    <form method="GET" action="{{ route('admin.reports.index') }}" class="d-flex gap-2 flex-wrap align-items-center">
+    {{-- Fixed widths on the period control: the month picker and the year
+         select are different sizes, so without them the whole toolbar shifted
+         sideways every time the view was switched. --}}
+    <form method="GET" action="{{ route('admin.reports.index') }}" class="rp-bar">
         <div class="rp-tabs">
             <a class="rp-tab {{ $daily ? 'is-on' : '' }}"
                href="{{ route('admin.reports.index', ['view' => 'daily', 'month' => $month]) }}">Daily</a>
@@ -47,18 +50,23 @@
 
         <input type="hidden" name="view" value="{{ $view }}">
 
-        @if($daily)
-            <input type="month" name="month" value="{{ $month }}" class="form-control"
-                   style="max-width: 180px;" onchange="this.form.submit()">
-        @else
-            <select name="year" class="form-select" style="max-width: 140px;" onchange="this.form.submit()">
-                @foreach($years as $y)
-                    <option value="{{ $y }}" {{ $y === $year ? 'selected' : '' }}>{{ $y }}</option>
-                @endforeach
-            </select>
-        @endif
+        <div class="rp-period">
+            @if($daily)
+                <input type="month" name="month" value="{{ $month }}" class="form-control"
+                       aria-label="Month to report on" onchange="this.form.submit()">
+            @else
+                <select name="year" class="form-select" aria-label="Year to report on"
+                        onchange="this.form.submit()">
+                    @foreach($years as $y)
+                        <option value="{{ $y }}" {{ $y === $year ? 'selected' : '' }}>{{ $y }}</option>
+                    @endforeach
+                </select>
+            @endif
+        </div>
 
-        <a href="{{ route('admin.reports.export', request()->query()) }}" class="chip-btn">Export CSV</a>
+        <a href="{{ route('admin.reports.export', request()->query()) }}" class="chip-btn rp-export">
+            Export CSV
+        </a>
     </form>
 </div>
 
@@ -179,10 +187,19 @@
                         @foreach($rows as $row)
                             <tr class="{{ $row['orders'] === 0 ? 'rp-quiet' : '' }}">
                                 <td>
-                                    {{ $row['label'] }}
-                                    @if($row['cancelled'] > 0)
-                                        <span class="pill pill-mute">{{ $row['cancelled'] }} cancelled</span>
-                                    @endif
+                                    <div class="rp-cell">
+                                        <span class="rp-when">{{ $row['label'] }}</span>
+                                        @if($row['cancelled'] > 0)
+                                            <span class="pill pill-mute">{{ $row['cancelled'] }} cancelled</span>
+                                        @endif
+                                    </div>
+
+                                    {{-- The same shape as the chart above, one
+                                         row at a time: the eye can find the
+                                         busy days without reading the column. --}}
+                                    <div class="rp-meter" aria-hidden="true">
+                                        <span style="width: {{ $summary['best_revenue'] > 0 ? round($row['revenue'] / $summary['best_revenue'] * 100, 1) : 0 }}%"></span>
+                                    </div>
                                 </td>
                                 <td class="text-end">{{ $row['orders'] ?: '—' }}</td>
                                 <td class="text-end">{{ $row['items'] ?: '—' }}</td>
@@ -231,6 +248,16 @@
 
 @push('styles')
 <style>
+    /* A toolbar that holds still. Every control keeps its width whichever
+       view is showing, so switching Daily/Monthly moves nothing but the
+       highlight. */
+    .rp-bar {
+        display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    }
+    .rp-period { flex: 0 0 176px; width: 176px; }
+    .rp-period .form-control, .rp-period .form-select { width: 100%; height: 38px; }
+    .rp-export { height: 38px; display: inline-flex; align-items: center; }
+
     .rp-tabs { display: inline-flex; gap: 6px; }
 
     .rp-tab {
@@ -253,10 +280,34 @@
 
     .rp-chart { overflow: visible; display: block; }
 
+    /* ----------------------------------------------------------- table */
+    .rp-cell { display: flex; align-items: center; gap: 8px; }
+    .rp-when { font-weight: 600; white-space: nowrap; }
+
+    .rp-meter {
+        height: 3px; margin-top: 6px; border-radius: 3px;
+        background: var(--card-2); overflow: hidden;
+        max-width: 190px;
+    }
+    .rp-meter span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+
+    /* Numbers line up column-wise only with tabular figures. */
+    .table-x td.text-end, .table-x th.text-end { font-variant-numeric: tabular-nums; }
+
+    .table-x tbody tr { transition: background-color .12s ease; }
+    .table-x tbody tr:hover { background: var(--card-2); }
+
+    /* A day with no trade is still a row — present, but not competing with
+       the days that earned something. */
     .rp-quiet td { color: var(--ink-3); }
+    .rp-quiet .rp-when { font-weight: 500; }
+    .rp-quiet .rp-meter { display: none; }
+
     .rp-total td {
-        border-top: 1px solid var(--line-2);
-        font-weight: 700; color: var(--ink);
+        border-top: 2px solid var(--line-2);
+        font-weight: 800; color: var(--ink);
+        position: sticky; bottom: 0;
+        background: var(--card);
     }
 
     .rp-prod {

@@ -367,10 +367,10 @@
        anchor that is really a component (a button, a tab, a card) paints its
        own text, and forcing accent on top of that makes a green label sit on
        a green pill, invisible. Each component class opts out here. */
-    .panel-body a:not(.btn):not(.dropdown-item):not(.chip-btn):not(.o-tab):not(.o-tile):not(.c-tab):not(.c-name):not(.cd-ref):not(.pr-tab):not(.pr-name) {
+    .panel-body a:not(.btn):not(.dropdown-item):not(.chip-btn):not(.o-tab):not(.o-tile):not(.c-tab):not(.c-name):not(.cd-ref):not(.pr-tab):not(.pr-name):not(.rp-tab) {
         color: var(--accent); text-decoration: none;
     }
-    .panel-body a:not(.btn):not(.dropdown-item):not(.chip-btn):not(.o-tab):not(.o-tile):not(.c-tab):not(.c-name):not(.cd-ref):not(.pr-tab):not(.pr-name):hover {
+    .panel-body a:not(.btn):not(.dropdown-item):not(.chip-btn):not(.o-tab):not(.o-tile):not(.c-tab):not(.c-name):not(.cd-ref):not(.pr-tab):not(.pr-name):not(.rp-tab):hover {
         text-decoration: underline;
     }
 
