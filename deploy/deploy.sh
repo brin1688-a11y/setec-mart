@@ -7,8 +7,10 @@
 set -euo pipefail
 
 APP_DIR=${APP_DIR:-/var/www/setec-mart}
-PHP_VERSION=${PHP_VERSION:-8.3}
 BRANCH=${BRANCH:-main}
+
+# Whatever setup-server.sh installed — 8.3 on Ubuntu 24.04, 8.5 on 26.04.
+PHP_VERSION=${PHP_VERSION:-$(ls /etc/php 2>/dev/null | sort -V | tail -1)}
 
 cd "$APP_DIR"
 

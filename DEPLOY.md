@@ -105,7 +105,7 @@ Copy that public key, then in the GitHub repository:
 ```bash
 sudo mkdir -p /var/www/setec-mart
 sudo chown www-data:www-data /var/www/setec-mart
-sudo -u www-data git clone git@github.com:YOUR_USER/setec-mart.git /var/www/setec-mart
+sudo -u www-data -H git clone git@github.com:YOUR_USER/setec-mart.git /var/www/setec-mart
 
 sudo DOMAIN=shop.example.com bash /var/www/setec-mart/deploy/setup-server.sh
 ```
@@ -159,7 +159,7 @@ Then:
 
 ```bash
 cd /var/www/setec-mart
-sudo -u www-data php artisan key:generate
+sudo -u www-data -H php artisan key:generate
 ```
 
 ## 6. Move the database to Supabase
@@ -184,7 +184,7 @@ psql "postgresql://postgres.YOUR_PROJECT_REF:PASSWORD@aws-0-ap-southeast-1.poole
 Then, on the server, let Laravel apply anything the dump predates:
 
 ```bash
-sudo -u www-data php artisan migrate --force
+sudo -u www-data -H php artisan migrate --force
 ```
 
 ## 7. Copy the product photos
@@ -213,7 +213,7 @@ reproducible from git plus the database.
 
 ```bash
 cd /var/www/setec-mart
-sudo -u www-data bash deploy/deploy.sh
+sudo -u www-data -H bash deploy/deploy.sh
 
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d shop.example.com
@@ -225,7 +225,7 @@ wait for DNS to propagate — certbot fails if the name does not resolve yet.
 ## Deploying after that
 
 ```bash
-cd /var/www/setec-mart && sudo -u www-data bash deploy/deploy.sh
+cd /var/www/setec-mart && sudo -u www-data -H bash deploy/deploy.sh
 ```
 
 Pulls, installs, migrates, rebuilds the caches, restarts the worker and checks

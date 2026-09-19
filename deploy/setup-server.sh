@@ -10,7 +10,6 @@ set -euo pipefail
 
 APP_DIR=${APP_DIR:-/var/www/setec-mart}
 DOMAIN=${DOMAIN:-_}
-PHP_VERSION=8.3
 REPO=${REPO:-}
 
 if [[ $EUID -ne 0 ]]; then
@@ -20,12 +19,32 @@ fi
 
 say() { printf '\n\033[1;32m==>\033[0m %s\n' "$1"; }
 
+# Which PHP the distribution carries, rather than a version hardcoded here:
+# 24.04 ships 8.3, 26.04 ships 8.5, and pinning either one breaks on the other.
+apt-get update -qq
+PHP_VERSION=${PHP_VERSION:-$(
+    apt-cache search --names-only '^php[0-9]+\.[0-9]+-fpm$' \
+        | grep -oE 'php[0-9]+\.[0-9]+' | sed 's/php//' | sort -V | tail -1
+)}
+
+if [[ -z $PHP_VERSION ]]; then
+    echo "No phpX.Y-fpm package found in apt. Is the universe repository enabled?" >&2
+    exit 1
+fi
+
+# Laravel 12 needs 8.2 or newer.
+if [[ $(printf '%s\n8.2\n' "$PHP_VERSION" | sort -V | head -1) != "8.2" ]]; then
+    echo "This distribution offers PHP $PHP_VERSION; Laravel 12 needs 8.2+." >&2
+    exit 1
+fi
+
+say "Using PHP $PHP_VERSION"
+
 # ---------------------------------------------------------------- packages
-# Ubuntu 24.04 ships PHP 8.3, which satisfies Laravel 12's "php": "^8.2" —
-# no third-party PPA needed, and none of them build reliably for ARM anyway.
+# The distribution's own PHP satisfies Laravel 12's "php": "^8.2", so there is
+# no third-party PPA to add — and none of them build reliably for ARM anyway.
 say "Installing packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
 apt-get install -y -qq \
     nginx git unzip curl supervisor \
     php${PHP_VERSION}-fpm php${PHP_VERSION}-cli \
