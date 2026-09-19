@@ -81,6 +81,29 @@ for port in 80 443; do
 done
 netfilter-persistent save >/dev/null
 
+# -------------------------------------------------------------------- clock
+# CutLuy signs each webhook with a timestamp and the app rejects anything more
+# than five minutes out, so a drifting clock silently turns paid orders into
+# rejected deliveries.
+#
+# Ubuntu ships NTS pools that need outbound UDP 123 and TCP 4460. Where egress
+# is restricted to HTTP/HTTPS, chrony ends up with no reachable source and
+# never synchronises — while still reporting "NTP service: active". On EC2 the
+# link-local time service is reachable regardless of the security group.
+if grep -qi amazon /sys/class/dmi/id/sys_vendor 2>/dev/null; then
+    say "Pointing chrony at the Amazon time service"
+    apt-get install -y -qq chrony
+    cat > /etc/chrony/conf.d/99-amazon-time-sync.conf <<'CONF'
+server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4
+CONF
+    # These can never be reached from a host without general egress, and an
+    # unreachable majority stops chrony selecting the one source that works.
+    for f in /etc/chrony/sources.d/ubuntu-ntp-pools.sources /etc/chrony/conf.d/ubuntu-nts.conf; do
+        [[ -f $f ]] && mv "$f" "$f.disabled"
+    done
+    systemctl restart chrony
+fi
+
 # -------------------------------------------------------------------- swap
 # t3.micro has 1GB of RAM. `composer install` resolving Laravel's dependency
 # tree will be killed by the OOM reaper without somewhere to spill.

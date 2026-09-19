@@ -314,6 +314,25 @@ env[TRUSTED_PROXIES] = "*"
 `"*"` is only safe when nothing but that proxy can reach the origin — restrict
 ports 80/443 in the security group to the proxy's IP ranges if you do this.
 
+**The clock has to stay right.** CutLuy signs each webhook with a timestamp
+and `WebhookSignature` rejects anything more than 300 seconds out, so drift
+turns paid orders into rejected deliveries — logged only as
+`invalid_signature`, which reads like a wrong secret rather than a wrong clock.
+
+Ubuntu's default NTS pools need outbound UDP 123 and TCP 4460. With egress
+restricted, chrony has no reachable source and never synchronises, while
+`timedatectl` still says "NTP service: active". `setup-server.sh` points chrony
+at EC2's link-local time service, which is reachable regardless of the security
+group. Check it with:
+
+```bash
+sudo chronyc tracking | grep "Leap status"
+```
+
+`Normal` is right; `Not synchronised` is not. Note that `timedatectl` reports
+"System clock synchronized: no" under chrony regardless — it only tracks
+systemd-timesyncd, so trust `chronyc`.
+
 **Backups.** Supabase keeps daily backups of the database on the free tier, but
 `storage/app/public` is yours alone. A weekly `rsync` of that directory off the
 server is enough.
