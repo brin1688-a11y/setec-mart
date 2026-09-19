@@ -13,35 +13,25 @@ against ~200 ms from a US datacentre.
 
 ---
 
-## 0. Before anything: give the project its own repository
+## 0. The project's own repository — done
 
-Right now the git repository containing this project is rooted at
-`C:\Users\SoatB` — your whole Windows home folder — it has **no commits**, and
-its remote points at an unrelated project (`sb24-telegram-bot`).
+The project now has its own git repository, rooted at the project folder and
+pushed to a private GitHub repo. Before that it was rooted at `C:\Users\SoatB`
+— the whole Windows home folder — with no commits and a remote pointing at an
+unrelated project.
 
-That has to be fixed first, because the server deploys by cloning. It is also a
-security matter: a `git add -A` in that repository would stage `.ssh/`, `.env`,
-`.claude.json` and your browser data, and pushing it would publish them.
+That mattered for more than deployment: a `git add -A` in the old repository
+would have staged `.ssh/`, `.env`, `.claude.json` and browser data, and pushing
+it would have published them.
 
-```bash
-cd "C:/Users/SoatB/OneDrive/Desktop/Projects/E_commerce/grocery-ecommerce"
-git init
-git add .
-git commit -m "Setec Mart"
-```
+The old repository at `C:\Users\SoatB` still exists. Deleting it is a separate
+decision; in the meantime, never run `git add` from the home folder.
 
-Then create a **private** repository on GitHub and push to it:
+Confirm before any push that `.env` and `vendor/` are absent:
 
 ```bash
-git remote add origin git@github.com:YOUR_USER/setec-mart.git
-git push -u origin main
+git status --short
 ```
-
-Check `git status` shows no `.env` and no `vendor/` before you push — the
-project `.gitignore` already covers both.
-
-Leave the repository at `C:\Users\SoatB` alone for now; deleting it is a
-separate decision. Just never run `git add` from your home folder.
 
 ---
 
@@ -86,17 +76,39 @@ public IP changes every time the instance stops, and your domain stops
 resolving to it. Note that AWS charges for public IPv4 addresses (~$3.60/month)
 — it comes out of your credits.
 
-## 3. Provision
+## 3. Give the server read access to the repository
+
+The repository is private, so the server needs its own credential. Use a
+**deploy key** — an SSH key that can read this one repository and nothing else.
+Not your account key: if the server is ever compromised, the attacker gets
+read-only access to one repo rather than everything you own on GitHub.
+
+The key belongs to `www-data`, because that is the user `deploy.sh` runs as and
+therefore the user that will `git fetch` on every deploy. `/var/www` is already
+that user's home directory.
 
 ```bash
-ssh -i your-key.pem ubuntu@YOUR_ELASTIC_IP
-
-sudo DOMAIN=shop.example.com REPO=git@github.com:YOUR_USER/setec-mart.git \
-     bash /var/www/setec-mart/deploy/setup-server.sh
+sudo mkdir -p /var/www/.ssh
+sudo ssh-keygen -t ed25519 -N "" -C "setec-mart deploy" -f /var/www/.ssh/id_ed25519
+sudo ssh-keyscan -t ed25519 github.com | sudo tee -a /var/www/.ssh/known_hosts
+sudo chown -R www-data:www-data /var/www/.ssh
+sudo chmod 700 /var/www/.ssh
+sudo cat /var/www/.ssh/id_ed25519.pub
 ```
 
-For the very first run, clone the repo yourself to `/var/www/setec-mart` first,
-or pass `REPO=` and let the script do it.
+Copy that public key, then in the GitHub repository:
+**Settings → Deploy keys → Add deploy key** — paste it, and leave
+**Allow write access unchecked**.
+
+## 4. Provision
+
+```bash
+sudo mkdir -p /var/www/setec-mart
+sudo chown www-data:www-data /var/www/setec-mart
+sudo -u www-data git clone git@github.com:YOUR_USER/setec-mart.git /var/www/setec-mart
+
+sudo DOMAIN=shop.example.com bash /var/www/setec-mart/deploy/setup-server.sh
+```
 
 This installs nginx, PHP 8.3 + the PostgreSQL driver, Composer and Supervisor;
 adds swap; raises the upload limits to fit a 10-image gallery; and installs the
@@ -110,7 +122,7 @@ Node.js is deliberately not installed. `@vite` appears only in
 `welcome.blade.php`, which no route serves — the storefront loads Bootstrap from
 a CDN, so there is no asset build step.
 
-## 4. The environment file
+## 5. The environment file
 
 Write `/var/www/setec-mart/.env`. **Never copy your local one** — generate fresh
 secrets on the server. Your local `.env` sits inside a OneDrive-synced folder.
@@ -150,7 +162,7 @@ cd /var/www/setec-mart
 sudo -u www-data php artisan key:generate
 ```
 
-## 5. Move the database to Supabase
+## 6. Move the database to Supabase
 
 Create the Supabase project in **Singapore (ap-southeast-1)** — the same region
 as the EC2 instance, so the app and its database are not talking across an
@@ -175,7 +187,7 @@ Then, on the server, let Laravel apply anything the dump predates:
 sudo -u www-data php artisan migrate --force
 ```
 
-## 6. Copy the product photos
+## 7. Copy the product photos
 
 Uploaded images are **not** in git (by design — `storage/` is generated data).
 The snack photos and everything else have to be copied across once:
@@ -197,7 +209,7 @@ From then on, images uploaded through the admin stay on the server's disk.
 Take them into your backups — this is the one part of the shop that is not
 reproducible from git plus the database.
 
-## 7. First deploy, then HTTPS
+## 8. First deploy, then HTTPS
 
 ```bash
 cd /var/www/setec-mart
