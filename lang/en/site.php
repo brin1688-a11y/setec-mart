@@ -101,7 +101,7 @@ return [
 
 
     'cart' => [
-        'title' => 'Shopping Cart',
+        'title' => 'Your Cart',
         'intro' => 'Review your items before checkout.',
         'empty_title' => 'Your cart is empty',
         'empty_body' => 'Browse our products and add something fresh.',
@@ -195,6 +195,7 @@ return [
         'too_many' => 'Too many attempts. Please wait a minute and try again.',
         'nothing_eligible' => 'That code does not apply to anything in your cart.',
         'applies_to' => 'Applies to :scope',
+        'removed' => 'Discount code removed.',
     ],
 
 

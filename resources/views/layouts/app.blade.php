@@ -286,6 +286,48 @@
         }
         .cart-thumb img { width: 100%; height: 100%; object-fit: cover; }
 
+        /* ------------------------------------------------------------ cart */
+        .cart-title {
+            display: flex; align-items: center; gap: 12px;
+            margin: 0 0 4px;
+            font-size: clamp(26px, 4vw, 34px);
+            font-weight: 800; letter-spacing: -.03em;
+            color: var(--ink);
+        }
+
+        /* A drawn trolley instead of the emoji: it takes the brand colour and
+           sits on the text baseline the same way on every platform. */
+        .cart-title-ico {
+            display: grid; place-items: center;
+            width: 44px; height: 44px; flex: 0 0 44px;
+            border-radius: 14px;
+            background: var(--brand-wash); color: var(--brand-2);
+        }
+        .cart-title-ico svg { width: 24px; height: 24px; }
+
+        .cart-sub { color: var(--ink-2); font-size: 15px; }
+
+        .cart-empty {
+            text-align: center; padding: 64px 24px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: var(--r-lg);
+            box-shadow: var(--sh-1);
+        }
+        .cart-empty-ico {
+            display: grid; place-items: center;
+            width: 76px; height: 76px; margin: 0 auto 16px;
+            border-radius: 50%;
+            background: var(--surface-2); color: var(--ink-3);
+        }
+        .cart-empty-ico svg { width: 36px; height: 36px; }
+
+        .cart-empty-title {
+            font-size: 19px; font-weight: 800; letter-spacing: -.02em;
+            color: var(--ink); margin: 0 0 6px;
+        }
+        .cart-empty-body { color: var(--ink-2); font-size: 14.5px; margin: 0 0 18px; }
+
         /* One line per item: the product on the left, its controls on the right. */
         .cart-row {
             display: flex; align-items: center; justify-content: space-between;

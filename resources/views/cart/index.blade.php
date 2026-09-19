@@ -4,18 +4,35 @@
 
 <div class="container py-5">
 
-    <div class="mb-5">
-        <h1 class="fw-bold">🛒 Your Cart</h1>
-        <p class="text-muted">@lang('site.cart.intro')</p>
+    <div class="cart-head mb-4">
+        <h1 class="cart-title">
+            <span class="cart-title-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2.5 3h2.1l2.2 11.2a1.8 1.8 0 0 0 1.8 1.4h8.4a1.8 1.8 0 0 0 1.8-1.4l1.4-6.9H6"></path>
+                    <circle cx="9.5" cy="20" r="1.5"></circle>
+                    <circle cx="17.5" cy="20" r="1.5"></circle>
+                </svg>
+            </span>
+            @lang('site.cart.title')
+        </h1>
+        <p class="cart-sub mb-0">@lang('site.cart.intro')</p>
     </div>
 
     @if($cart->items->isEmpty())
 
-        <div class="text-center py-5 bg-white rounded-4 shadow-sm">
-            <div style="font-size: 70px;">🛒</div>
-            <h4 class="mt-3">@lang('site.cart.empty_title')</h4>
-            <p class="text-muted">@lang('site.cart.empty_body')</p>
-            <a href="{{ route('products.index') }}" class="btn btn-success rounded-pill px-4 mt-2">
+        <div class="cart-empty">
+            <span class="cart-empty-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+                     stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2.5 3h2.1l2.2 11.2a1.8 1.8 0 0 0 1.8 1.4h8.4a1.8 1.8 0 0 0 1.8-1.4l1.4-6.9H6"></path>
+                    <circle cx="9.5" cy="20" r="1.5"></circle>
+                    <circle cx="17.5" cy="20" r="1.5"></circle>
+                </svg>
+            </span>
+            <h2 class="cart-empty-title">@lang('site.cart.empty_title')</h2>
+            <p class="cart-empty-body">@lang('site.cart.empty_body')</p>
+            <a href="{{ route('products.index') }}" class="btn btn-success rounded-pill px-4">
                 Shop Products
             </a>
         </div>
@@ -87,8 +104,14 @@
                                         min="1"
                                         class="form-control form-control-sm"
                                         style="width: 70px;"
+                                        aria-label="Quantity of {{ $item->product->name }}"
+                                        data-cart-qty
                                     >
-                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                    {{-- Hidden once the script takes over, so a
+                                         browser without JavaScript keeps a way
+                                         to submit the new quantity. --}}
+                                    <button type="submit" class="btn btn-sm btn-outline-success"
+                                            data-cart-update>
                                         Update
                                     </button>
                                 </form>
@@ -150,5 +173,32 @@
     @endif
 
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    // Changing the number is the instruction; pressing a second button to
+    // confirm it is not. `change` rather than `input` so the form posts once
+    // the customer has finished typing or has clicked the stepper, not on
+    // every keystroke.
+    document.querySelectorAll('[data-cart-qty]').forEach(function (field) {
+        const original = field.value;
+
+        field.addEventListener('change', function () {
+            if (field.value === original) return;
+            if (Number(field.value) < 1) { field.value = original; return; }
+
+            // readOnly, not disabled: a disabled field is left out of the
+            // submission, so the quantity would never reach the server.
+            field.readOnly = true;
+            field.form.submit();
+        });
+    });
+
+    // Only now: without JavaScript this button is the way to submit.
+    document.querySelectorAll('[data-cart-update]').forEach(function (button) {
+        button.hidden = true;
+    });
+});
+</script>
 
 @endsection

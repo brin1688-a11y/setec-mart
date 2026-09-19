@@ -13,6 +13,11 @@ use Illuminate\Support\Facades\RateLimiter;
  * The chosen code lives in the session, never in a hidden form field — the
  * discount is recalculated from the database when the order is placed, so a
  * code cannot be edited in the page.
+ *
+ * Both actions answer JSON when the page asks for it. A full round trip would
+ * redirect back to a freshly rendered checkout, and every delivery detail the
+ * customer had typed but not yet submitted would be gone — including the
+ * province, which is required, so the next Place Order would fail validation.
  */
 class CouponController extends Controller
 {
@@ -28,7 +33,7 @@ class CouponController extends Controller
         $throttleKey = 'coupon:' . Auth::id();
 
         if (RateLimiter::tooManyAttempts($throttleKey, maxAttempts: 10)) {
-            return back()->with('coupon_error', __('site.coupon.too_many'));
+            return $this->respond($request, false, __('site.coupon.too_many'));
         }
 
         RateLimiter::hit($throttleKey, decaySeconds: 60);
@@ -43,11 +48,11 @@ class CouponController extends Controller
         $coupon = Coupon::with('categories', 'products')->where('code', strtoupper(trim($request->input('code'))))->first();
 
         if (! $coupon) {
-            return back()->with('coupon_error', __('site.coupon.not_found'));
+            return $this->respond($request, false, __('site.coupon.not_found'));
         }
 
         if ($reason = $coupon->reasonUnusable($subtotal)) {
-            return back()->with('coupon_error', $reason);
+            return $this->respond($request, false, $reason);
         }
 
         // A category- or product-limited coupon may be perfectly valid and
@@ -55,21 +60,44 @@ class CouponController extends Controller
         $discount = $coupon->discountForCart($cart->items);
 
         if ($discount <= 0) {
-            return back()->with('coupon_error', __('site.coupon.nothing_eligible'));
+            return $this->respond($request, false, __('site.coupon.nothing_eligible'));
         }
 
         $request->session()->put(self::SESSION_KEY, $coupon->code);
 
-        return back()->with('coupon_success', __('site.coupon.applied', [
+        return $this->respond($request, true, __('site.coupon.applied', [
             'code' => $coupon->code,
             'amount' => '$' . number_format($discount, 2),
-        ]));
+        ]), [
+            'code' => $coupon->code,
+            'discount' => round($discount, 2),
+        ]);
     }
 
     public function remove(Request $request)
     {
         $request->session()->forget(self::SESSION_KEY);
 
-        return back();
+        return $this->respond($request, true, __('site.coupon.removed'), [
+            'code' => null,
+            'discount' => 0,
+        ]);
+    }
+
+    /**
+     * Answer in whichever form the caller asked for.
+     *
+     * @param  array<string, mixed>  $extra
+     */
+    protected function respond(Request $request, bool $ok, string $message, array $extra = [])
+    {
+        if ($request->expectsJson()) {
+            return response()->json(
+                array_merge(['ok' => $ok, 'message' => $message], $extra),
+                $ok ? 200 : 422
+            );
+        }
+
+        return back()->with($ok ? 'coupon_success' : 'coupon_error', $message);
     }
 }

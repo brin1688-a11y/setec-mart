@@ -269,17 +269,17 @@
                         <span>${{ number_format($subtotal, 2) }}</span>
                     </div>
 
-                    @if($coupon)
-                        <div class="d-flex justify-content-between small mt-1 text-success">
-                            <span class="d-inline-flex align-items-center gap-1">
-                                @lang('site.checkout.discount')
-                                <span class="badge bg-success-subtle text-success border border-success-subtle">
-                                    {{ $coupon->code }}
-                                </span>
-                            </span>
-                            <span>-${{ number_format($discount, 2) }}</span>
-                        </div>
-                    @endif
+                    {{-- Always rendered so applying a code can fill it in
+                         without reloading the page. --}}
+                    <div class="d-flex justify-content-between small mt-1 text-success {{ $coupon ? '' : 'd-none' }}"
+                         id="discountRow">
+                        <span class="d-inline-flex align-items-center gap-1">
+                            @lang('site.checkout.discount')
+                            <span class="badge bg-success-subtle text-success border border-success-subtle"
+                                  id="discountCode">{{ $coupon?->code }}</span>
+                        </span>
+                        <span id="discountAmount">-${{ number_format($discount, 2) }}</span>
+                    </div>
 
                     <div class="d-flex justify-content-between small text-muted mt-1">
                         <span>
@@ -315,25 +315,32 @@
                     {{-- Outside the main form: a nested <form> is invalid HTML,
                          so this posts via its own form element rendered after
                          the summary and linked with the form attribute. --}}
+                    {{-- Both states are always in the page so the script can
+                         switch between them after applying or removing a code,
+                         instead of reloading and losing the form. --}}
                     <div class="mb-3">
-                        @if(session('coupon_error'))
-                            <div class="alert alert-warning py-2 px-3 small mb-2">
-                                {{ session('coupon_error') }}
-                            </div>
-                        @endif
+                        <div id="couponMessage">
+                            @if(session('coupon_error'))
+                                <div class="alert alert-warning py-2 px-3 small mb-2">
+                                    {{ session('coupon_error') }}
+                                </div>
+                            @endif
 
-                        @if(session('coupon_success'))
-                            <div class="alert alert-success py-2 px-3 small mb-2">
-                                {{ session('coupon_success') }}
-                            </div>
-                        @endif
+                            @if(session('coupon_success'))
+                                <div class="alert alert-success py-2 px-3 small mb-2">
+                                    {{ session('coupon_success') }}
+                                </div>
+                            @endif
+                        </div>
 
-                        @if($coupon)
+                        <div id="couponApplied" class="{{ $coupon ? '' : 'd-none' }}">
                             <button type="submit" form="removeCouponForm"
                                     class="btn btn-link btn-sm text-muted p-0 text-decoration-none">
-                                @lang('site.checkout.coupon_remove') "{{ $coupon->code }}"
+                                @lang('site.checkout.coupon_remove') "<span id="appliedCode">{{ $coupon?->code }}</span>"
                             </button>
-                        @else
+                        </div>
+
+                        <div id="couponEntry" class="{{ $coupon ? 'd-none' : '' }}">
                             <label for="couponCode" class="form-label small text-muted mb-1">
                                 @lang('site.checkout.have_coupon')
                             </label>
@@ -342,11 +349,12 @@
                                        class="form-control text-uppercase"
                                        placeholder="{{ __('site.checkout.coupon_placeholder') }}"
                                        autocomplete="off">
-                                <button type="submit" form="applyCouponForm" class="btn btn-outline-success">
+                                <button type="submit" form="applyCouponForm" class="btn btn-outline-success"
+                                        id="applyCouponBtn">
                                     @lang('site.checkout.coupon_apply')
                                 </button>
                             </div>
-                        @endif
+                        </div>
                     </div>
 
                     <button type="submit" class="btn btn-success btn-lg w-100 rounded-pill" id="placeOrderBtn">
@@ -384,7 +392,9 @@ document.addEventListener('DOMContentLoaded', function () {
     const zoneOf = @json($zoneOf);
     const rules = @json($zoneRules);
     const subtotal = {{ $subtotal }};
-    const discount = {{ $discount }};
+
+    // Not const: applying or removing a code changes it without a page load.
+    let discount = {{ $discount }};
 
     const select = document.getElementById('provinceSelect');
     const feeEl = document.getElementById('deliveryFee');
@@ -438,6 +448,97 @@ document.addEventListener('DOMContentLoaded', function () {
 
     select.addEventListener('change', update);
     update();
+
+    // ---- Coupons, without throwing away the form ------------------------
+    //
+    // These two forms used to post normally, which meant a redirect back to a
+    // freshly rendered checkout: every delivery field typed but not submitted
+    // was wiped, the required province with it. Posting them in the background
+    // leaves the page exactly as the customer left it.
+
+    const couponMessage = document.getElementById('couponMessage');
+    const couponEntry = document.getElementById('couponEntry');
+    const couponApplied = document.getElementById('couponApplied');
+    const appliedCode = document.getElementById('appliedCode');
+    const discountRow = document.getElementById('discountRow');
+    const discountCode = document.getElementById('discountCode');
+    const discountAmount = document.getElementById('discountAmount');
+
+    function say(text, ok) {
+        couponMessage.innerHTML = '';
+        if (!text) return;
+
+        const box = document.createElement('div');
+        box.className = 'alert py-2 px-3 small mb-2 ' + (ok ? 'alert-success' : 'alert-warning');
+        box.textContent = text;
+        couponMessage.appendChild(box);
+    }
+
+    function showCoupon(code, amount) {
+        discount = amount;
+
+        if (code) {
+            appliedCode.textContent = code;
+            discountCode.textContent = code;
+            discountAmount.textContent = '-' + money(amount);
+            discountRow.classList.remove('d-none');
+            couponEntry.classList.add('d-none');
+            couponApplied.classList.remove('d-none');
+        } else {
+            discountRow.classList.add('d-none');
+            couponApplied.classList.add('d-none');
+            couponEntry.classList.remove('d-none');
+            const field = document.getElementById('couponCode');
+            if (field) field.value = '';
+        }
+
+        update();
+    }
+
+    async function post(form, button) {
+        if (button) button.disabled = true;
+
+        try {
+            const res = await fetch(form.action, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                body: new FormData(form),
+            });
+
+            // A session that timed out answers with the login page, not JSON.
+            if (res.status === 419 || res.redirected) {
+                window.location.reload();
+                return;
+            }
+
+            const data = await res.json();
+            say(data.message, data.ok === true);
+
+            if (data.ok) showCoupon(data.code, Number(data.discount) || 0);
+        } catch (e) {
+            // Fall back to the ordinary post rather than leaving them stuck.
+            form.submit();
+        } finally {
+            if (button) button.disabled = false;
+        }
+    }
+
+    const applyForm = document.getElementById('applyCouponForm');
+    const removeForm = document.getElementById('removeCouponForm');
+
+    if (applyForm) {
+        applyForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            post(applyForm, document.getElementById('applyCouponBtn'));
+        });
+    }
+
+    if (removeForm) {
+        removeForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            post(removeForm, null);
+        });
+    }
 });
 </script>
 
