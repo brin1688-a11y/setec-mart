@@ -140,8 +140,14 @@ sed -e "s|{{APP_DIR}}|${APP_DIR}|g" \
 # cutluy:reconcile runs every five minutes off this one entry.
 say "Installing the scheduler cron entry"
 CRON="* * * * * cd ${APP_DIR} && php artisan schedule:run >> /dev/null 2>&1"
-( crontab -u www-data -l 2>/dev/null | grep -Fv 'artisan schedule:run'; echo "$CRON" ) \
-    | crontab -u www-data -
+
+# `|| true` because grep reports "no lines matched" as a failure, and on a
+# server with no crontab yet that is the normal case — under `set -e` it would
+# abort the run here, before any service is started.
+{
+    crontab -u www-data -l 2>/dev/null | grep -Fv 'artisan schedule:run' || true
+    echo "$CRON"
+} | crontab -u www-data -
 
 # ------------------------------------------------------------------ restart
 say "Starting services"
