@@ -45,6 +45,22 @@
     }
     .chat-bubble:hover { background: var(--brand-2); transform: translateY(-2px); }
 
+    /* On a phone the launcher sits in the corner a thumb reaches for, and on
+       an iPhone that corner is where the home indicator lives. Tuck it inside
+       the safe area and take a little size back from the page. */
+    @media (max-width: 575.98px) {
+        .chat-bubble {
+            width: 52px; height: 52px;
+            right: 14px;
+            bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+        }
+
+        .chat-panel {
+            right: 14px;
+            bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+        }
+    }
+
     .chat-panel {
         position: fixed; bottom: 88px; right: 20px; z-index: 1050;
         width: min(370px, calc(100vw - 32px));

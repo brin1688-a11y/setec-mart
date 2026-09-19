@@ -31,9 +31,9 @@
 
                     @foreach($cart->items as $item)
 
-                        <div class="d-flex align-items-center justify-content-between py-3 {{ !$loop->last ? 'border-bottom' : '' }}">
+                        <div class="cart-row py-3 {{ !$loop->last ? 'border-bottom' : '' }}">
 
-                            <div class="d-flex align-items-center gap-3">
+                            <div class="cart-row-main">
 
                                 {{-- The real photograph, the way every other
                                      page shows it; the category mark is only
@@ -75,7 +75,7 @@
 
                             </div>
 
-                            <div class="d-flex align-items-center gap-4">
+                            <div class="cart-row-actions">
 
                                 <form method="POST" action="{{ route('cart.update', $item) }}" class="d-flex align-items-center gap-2">
                                     @csrf

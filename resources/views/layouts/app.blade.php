@@ -232,6 +232,25 @@
         }
         .p-card-add:hover { background: var(--brand); color: #fff; }
 
+        /* ---------------------------------------------------- touch screens */
+        @media (max-width: 575.98px) {
+            /* Safari zooms the page whenever a focused field is smaller than
+               16px, and does not zoom back out — so every tap into a form
+               left the site enlarged and scrolled off to one side.
+               !important because page-level styles like `.cat-search input`
+               outrank a bare element selector however this rule is ordered,
+               and one stray 15px field is enough to trigger the zoom. */
+            input, select, textarea,
+            .form-control, .form-select { font-size: 16px !important; }
+
+            /* The primary action on the catalogue. 34px is under the size a
+               fingertip hits reliably, so add-to-cart was easy to miss. */
+            .p-card-add {
+                width: 44px; height: 44px; flex: 0 0 44px;
+                font-size: 22px;
+            }
+        }
+
         /* A promotion: the price being charged, then what it was. */
         .p-sale { color: var(--brand-2); }
         .p-was, .pd-was {
@@ -266,6 +285,34 @@
             display: grid; place-items: center; text-decoration: none;
         }
         .cart-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+        /* One line per item: the product on the left, its controls on the right. */
+        .cart-row {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: 12px;
+        }
+        .cart-row-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+        .cart-row-actions { display: flex; align-items: center; gap: 16px; }
+
+        @media (max-width: 575.98px) {
+            /* That single line needs about 540px. On a 375px screen it pushed
+               the page sideways — on the last screen before checkout, of all
+               places. Give the controls a line of their own instead. */
+            .cart-row { flex-wrap: wrap; }
+            .cart-row-main { flex: 1 1 100%; }
+
+            .cart-row-actions {
+                flex: 1 1 100%;
+                justify-content: space-between;
+                gap: 8px;
+                margin-top: 10px;
+            }
+
+            /* Quantity, Update, price and Remove come to about 306px together,
+               so nothing here can afford an indent or a wide field. */
+            .cart-row-actions .btn-sm { padding: 7px 10px; }
+            .cart-row-actions input[type="number"] { width: 58px !important; }
+        }
         .cart-thumb-mark { font-size: 32px; line-height: 1; }
 
         /* ------------------------------------------------ search suggestions */
@@ -590,13 +637,25 @@
         .hero {
             background: linear-gradient(135deg, #198754, #43b97f);
             color: white;
-            padding: 100px 0;
+            padding: clamp(44px, 9vw, 100px) 0;
             border-radius: 0 0 40px 40px;
         }
 
+        /* Fixed at 52px this ran to four lines on a phone and pushed the
+           whole hero past one screen, so the shop began below the fold. */
         .hero h1 {
-            font-size: 52px;
+            font-size: clamp(30px, 7.5vw, 52px);
             font-weight: bold;
+            line-height: 1.12;
+        }
+
+        @media (max-width: 575.98px) {
+            /* The break is placed for a wide screen; on a narrow one it just
+               makes the ragged edge worse. Let the text wrap where it likes. */
+            .hero h1 br { display: none; }
+
+            .hero .lead { font-size: 16px; }
+            .hero .btn-lg { width: 100%; }
         }
 
         .category-card {

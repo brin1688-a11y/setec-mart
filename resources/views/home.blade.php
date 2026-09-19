@@ -30,6 +30,24 @@
         margin-top: 30px;
     }
 
+    /* 130 + 160 + 130 plus the gaps is 452px, so on a phone the three photos
+       pushed the page 42px wider than the screen and the whole site scrolled
+       sideways. Letting them share the row keeps the arrangement and fits. */
+    @media (max-width: 575.98px) {
+        .hero-photos { gap: 10px !important; }
+
+        .hero-photo {
+            flex: 1 1 0;
+            min-width: 0;
+            width: auto;
+            height: auto;
+            aspect-ratio: 1;
+        }
+
+        .hero-photo-veg { flex-grow: 1.3; }
+        .hero-photo-cart, .hero-photo-apple { margin-top: 16px; }
+    }
+
     .category-photo-wrap {
         width: 72px;
         height: 72px;
