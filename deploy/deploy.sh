@@ -10,6 +10,18 @@
 #
 set -euo pipefail
 
+# This script pulls, and the pull can rewrite this very file while bash is
+# still reading it — bash reads a script in chunks and would carry on at the
+# old byte offset in the new file. Run from a copy so a deploy always finishes
+# with the version it started with; changes to this file take effect next time.
+if [[ ${DEPLOY_FROM_COPY:-0} != 1 ]]; then
+    SELF_COPY=$(mktemp)
+    cp "$0" "$SELF_COPY"
+    trap 'rm -f "$SELF_COPY"' EXIT
+    DEPLOY_FROM_COPY=1 bash "$SELF_COPY" "$@"
+    exit $?
+fi
+
 APP_DIR=${APP_DIR:-/var/www/setec-mart}
 BRANCH=${BRANCH:-main}
 
@@ -72,8 +84,14 @@ HOSTNAME_FOR_CHECK=$(
     grep -m1 '^APP_URL=' .env 2>/dev/null | cut -d= -f2- | tr -d '"' | sed -E 's#^https?://##; s#/.*##'
 )
 
-curl -fsS -o /dev/null -H "Host: ${HOSTNAME_FOR_CHECK:-localhost}" \
-     -w 'health check: %{http_code}\n' http://127.0.0.1/up || {
+HOST=${HOSTNAME_FOR_CHECK:-localhost}
+
+# Pinned to the loopback so the check never depends on DNS, but addressed by
+# the site's own name so nginx matches the right server block and the
+# certificate validates. -L follows the redirect up to HTTPS.
+curl -fsS -o /dev/null -L \
+     --resolve "${HOST}:80:127.0.0.1" --resolve "${HOST}:443:127.0.0.1" \
+     -w 'health check: %{http_code}\n' "http://${HOST}/up" || {
     echo "Health check failed — check storage/logs/laravel.log" >&2
     exit 1
 }
