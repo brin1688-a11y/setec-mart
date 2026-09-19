@@ -71,6 +71,29 @@ EC2 console, region **Singapore (ap-southeast-1)**:
 Leave SSH open to the world and you will be in someone's brute-force list
 within the hour.
 
+**Leave the outbound rules alone** — AWS's default is "All traffic", and that
+is what you want. Narrowing egress to HTTP/HTTPS looks tidy and then quietly
+breaks things that are not obviously network-related:
+
+| Blocked port | What stops working |
+|---|---|
+| 5432 | every database query — Supabase is not on the instance |
+| 22 | `git clone`/`git pull` over SSH, so deploys fail |
+
+Both surface as "timeout expired" rather than anything mentioning a firewall,
+which makes them slow to diagnose. If egress must be restricted, allow at least
+TCP 5432 and 443 outbound to `0.0.0.0/0`.
+
+GitHub can be reached over 443 instead of 22, which is worth knowing if you are
+ever on a network that blocks it — put this in `/var/www/.ssh/config`:
+
+```
+Host github.com
+    Hostname ssh.github.com
+    Port 443
+    User git
+```
+
 **Allocate an Elastic IP and associate it with the instance.** Without one the
 public IP changes every time the instance stops, and your domain stops
 resolving to it. Note that AWS charges for public IPv4 addresses (~$3.60/month)
