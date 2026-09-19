@@ -1,0 +1,175 @@
+<?php
+
+namespace App\Http\Controllers\Admin;
+
+use App\Http\Controllers\Controller;
+use App\Models\Order;
+use App\Models\Payment;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+
+class OrderController extends Controller
+{
+    /**
+     * Where an order is allowed to go next.
+     *
+     * An order only moves forward through the pipeline, and can be cancelled
+     * from anywhere before it is out for delivery. Once it is Delivered or
+     * Cancelled it is finished — otherwise a stray click could un-deliver an
+     * order, or cancel one twice and hand the stock back a second time.
+     *
+     * @var array<string, array<int, string>>
+     */
+    public const TRANSITIONS = [
+        'Pending' => ['Confirmed', 'Cancelled'],
+        'Confirmed' => ['Preparing', 'Cancelled'],
+        'Preparing' => ['Out for Delivery', 'Cancelled'],
+        'Out for Delivery' => ['Delivered', 'Cancelled'],
+        'Delivered' => [],
+        'Cancelled' => [],
+    ];
+
+    /**
+     * Orders that never brought money in.
+     */
+    protected const DEAD_STATUSES = ['Cancelled'];
+
+    public function index(Request $request)
+    {
+        $status = in_array($request->query('status'), Order::STATUSES, true)
+            ? $request->query('status')
+            : null;
+
+        $search = trim((string) $request->query('q'));
+
+        $orders = Order::with(['user', 'payment', 'items'])
+            ->when($status, fn ($q) => $q->where('status', $status))
+            ->when($search !== '', function ($q) use ($search) {
+                // Whatever the shop has to hand: the reference the customer
+                // read out, their name, or the phone the order came from.
+                $like = '%'.strtolower($search).'%';
+
+                $q->where(function ($q) use ($like) {
+                    $q->whereRaw('LOWER(order_number) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(name) LIKE ?', [$like])
+                        ->orWhereRaw('LOWER(phone) LIKE ?', [$like]);
+                });
+            })
+            ->latest()
+            ->paginate(15)
+            ->withQueryString();
+
+        return view('admin.orders.index', [
+            'orders' => $orders,
+            'status' => $status,
+            'search' => $search,
+            'counts' => $this->counts(),
+            'today' => $this->todayAtAGlance(),
+        ]);
+    }
+
+    /**
+     * How many orders sit at each step, for the filter tabs.
+     *
+     * @return array<string, int>
+     */
+    protected function counts(): array
+    {
+        $byStatus = Order::selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $counts = ['' => (int) $byStatus->sum()];
+
+        foreach (Order::STATUSES as $status) {
+            $counts[$status] = (int) ($byStatus[$status] ?? 0);
+        }
+
+        return $counts;
+    }
+
+    /**
+     * The numbers a shop actually opens this page for: what is waiting on
+     * someone, and what today has taken.
+     *
+     * @return array<string, mixed>
+     */
+    protected function todayAtAGlance(): array
+    {
+        $today = [now()->startOfDay(), now()->endOfDay()];
+
+        return [
+            'awaiting_payment' => Order::where('status', 'Pending')
+                ->whereHas('payment', fn ($q) => $q->where('method', Payment::METHOD_KHQR)
+                    ->where('status', Payment::STATUS_PENDING))
+                ->count(),
+            'to_prepare' => Order::whereIn('status', ['Confirmed', 'Preparing'])->count(),
+            'on_the_road' => Order::where('status', 'Out for Delivery')->count(),
+            'orders_today' => Order::whereBetween('created_at', $today)->count(),
+            'revenue_today' => (float) Order::whereNotIn('status', self::DEAD_STATUSES)
+                ->whereBetween('created_at', $today)
+                ->sum('total'),
+        ];
+    }
+
+    public function show(Order $order)
+    {
+        // allItems, so a line the customer took off is still on the record.
+        $order->load('items.product.images', 'allItems.product.images', 'payment', 'user');
+
+        return view('admin.orders.show', [
+            'order' => $order,
+            'allowedStatuses' => self::TRANSITIONS[$order->status] ?? [],
+            'customerOrders' => Order::where('user_id', $order->user_id)->count(),
+            'customerSpend' => (float) Order::where('user_id', $order->user_id)
+                ->whereNotIn('status', self::DEAD_STATUSES)
+                ->sum('total'),
+        ]);
+    }
+
+    public function updateStatus(Request $request, Order $order)
+    {
+        $allowed = self::TRANSITIONS[$order->status] ?? [];
+
+        if ($allowed === []) {
+            return back()->with('error', 'Order '.$order->order_number.' is '.strtolower($order->status).' and can no longer be changed.');
+        }
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in($allowed)],
+        ], [
+            'status.in' => 'An order that is '.strtolower($order->status)
+                .' can only move to: '.implode(', ', $allowed).'.',
+        ]);
+
+        $message = DB::transaction(function () use ($order, $validated) {
+            // Lock the row so two admins clicking at once cannot both cancel
+            // it and return the stock twice.
+            $fresh = Order::whereKey($order->id)->lockForUpdate()->first();
+
+            if (! in_array($validated['status'], self::TRANSITIONS[$fresh->status] ?? [], true)) {
+                return 'Order '.$fresh->order_number.' was already updated by someone else.';
+            }
+
+            if ($validated['status'] === 'Cancelled') {
+                // Stock was taken off the shelf when the order was placed, so
+                // cancelling has to put it back.
+                $fresh->load('items');
+                $fresh->restoreStock();
+            }
+
+            $fresh->update(['status' => $validated['status']]);
+
+            return null;
+        });
+
+        if ($message) {
+            return back()->with('error', $message);
+        }
+
+        return back()->with('success', $validated['status'] === 'Cancelled'
+            ? 'Order cancelled and stock returned to inventory.'
+            : 'Order status updated to '.$validated['status'].'.');
+    }
+}
