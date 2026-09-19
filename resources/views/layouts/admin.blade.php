@@ -484,6 +484,9 @@
             <a href="{{ route('admin.orders.index') }}" class="rail-link {{ request()->routeIs('admin.orders.*') ? 'on' : '' }}" title="Orders">
                 <span class="ic">&#9635;</span><span class="tx">Orders</span>
             </a>
+            <a href="{{ route('admin.reports.index') }}" class="rail-link {{ request()->routeIs('admin.reports.*') ? 'on' : '' }}" title="Sales reports">
+                <span class="ic">&#9620;</span><span class="tx">Reports</span>
+            </a>
 
             <div class="rail-section">Catalogue</div>
 

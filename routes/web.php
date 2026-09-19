@@ -132,6 +132,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::patch('/coupons/{coupon}/toggle', [AdminCouponController::class, 'toggle'])->name('coupons.toggle');
 
     // What delivery costs, editable instead of living in a config file.
+    Route::get('/reports', [\App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');
+    Route::get('/reports/export', [\App\Http\Controllers\Admin\ReportController::class, 'export'])->name('reports.export');
+
     Route::get('/delivery', [\App\Http\Controllers\Admin\DeliveryController::class, 'edit'])->name('delivery.edit');
     Route::put('/delivery', [\App\Http\Controllers\Admin\DeliveryController::class, 'update'])->name('delivery.update');
     Route::delete('/delivery', [\App\Http\Controllers\Admin\DeliveryController::class, 'reset'])->name('delivery.reset');
