@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -40,8 +41,12 @@ class AuthController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->route('home')
-            ->with('success', 'Welcome to FreshMart, ' . $user->name . '!');
+        // Signed in straight away - the link confirms the address, it is not
+        // a gate on the account. Only placing an order waits for it.
+        event(new Registered($user));
+
+        return redirect()->route('verification.notice')
+            ->with('success', 'Welcome to '.config('app.name').', '.$user->name.'!');
     }
 
     /**

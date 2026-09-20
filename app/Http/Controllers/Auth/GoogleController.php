@@ -51,7 +51,7 @@ class GoogleController extends Controller
         } catch (Throwable $e) {
             // Covers a denied consent screen, an expired state token, and a
             // misconfigured client — none of which should show a stack trace.
-            Log::warning('Google sign-in failed: ' . $e->getMessage());
+            Log::warning('Google sign-in failed: '.$e->getMessage());
 
             return redirect()->route('login')
                 ->withErrors(['email' => 'We could not sign you in with Google. Please try again.']);
@@ -103,7 +103,7 @@ class GoogleController extends Controller
         request()->session()->regenerate();
 
         return redirect()->intended(route('home'))
-            ->with('success', 'Welcome, ' . $user->name . '!');
+            ->with('success', 'Welcome, '.$user->name.'!');
     }
 
     protected function configured(): bool

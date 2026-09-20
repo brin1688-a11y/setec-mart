@@ -11,7 +11,9 @@ use App\Http\Controllers\Admin\OrderController as AdminOrderController;
 use App\Http\Controllers\Admin\ProductController as AdminProductController;
 use App\Http\Controllers\Admin\ReportController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\Auth\EmailVerificationController;
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\Auth\PasswordResetController;
 use App\Http\Controllers\CartController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\ChatController;
@@ -67,11 +69,34 @@ Route::middleware('guest')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
     });
 
+    // Forgotten passwords. Throttled the same as the credential forms: the
+    // request form is also a way to probe which addresses have accounts.
+    Route::middleware('throttle:5,1')->group(function () {
+        Route::get('/forgot-password', [PasswordResetController::class, 'showRequest'])->name('password.request');
+        Route::post('/forgot-password', [PasswordResetController::class, 'sendLink'])->name('password.email');
+        Route::get('/reset-password/{token}', [PasswordResetController::class, 'showReset'])->name('password.reset');
+        Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
+    });
+
     // Sign in with Google
     Route::middleware('throttle:10,1')->group(function () {
         Route::get('/auth/google', [GoogleController::class, 'redirect'])->name('auth.google');
         Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('auth.google.callback');
     });
+});
+
+// Confirming an email address. Signed in but not yet confirmed still reaches
+// these — that is the whole point of them.
+Route::middleware('auth')->group(function () {
+    Route::get('/email/verify', [EmailVerificationController::class, 'notice'])->name('verification.notice');
+
+    Route::get('/email/verify/{id}/{hash}', [EmailVerificationController::class, 'verify'])
+        ->middleware(['signed', 'throttle:6,1'])
+        ->name('verification.verify');
+
+    Route::post('/email/verification-notification', [EmailVerificationController::class, 'resend'])
+        ->middleware('throttle:3,1')
+        ->name('verification.send');
 });
 
 // Authenticated customer routes
@@ -93,12 +118,19 @@ Route::middleware('auth')->group(function () {
         Route::patch('/cart/update/{cartItem}', [CartController::class, 'update'])->name('cart.update');
         Route::delete('/cart/remove/{cartItem}', [CartController::class, 'remove'])->name('cart.remove');
 
-        Route::get('/checkout', [CheckoutController::class, 'index'])->name('checkout.index');
+        // Only the till waits for a confirmed address. Browsing, the cart and
+        // the account pages stay open, so an unconfirmed customer is never
+        // stuck wondering what went wrong — they find out when it matters,
+        // with the resend button in front of them. It also means junk orders
+        // need a working inbox first.
+        Route::get('/checkout', [CheckoutController::class, 'index'])
+            ->middleware('verified')
+            ->name('checkout.index');
         // Placing an order takes the stock off the shelf, so a script that
         // hammers this empties the shop even if every order is cancelled a
         // moment later. Eight a minute is far more than anyone shopping.
         Route::post('/checkout', [CheckoutController::class, 'store'])
-            ->middleware('throttle:8,1')
+            ->middleware(['verified', 'throttle:8,1'])
             ->name('checkout.store');
         Route::post('/checkout/coupon', [CouponController::class, 'apply'])->name('coupon.apply');
         Route::delete('/checkout/coupon', [CouponController::class, 'remove'])->name('coupon.remove');

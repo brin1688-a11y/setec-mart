@@ -57,9 +57,17 @@
                         >
                     </div>
 
-                    <div class="mb-4 form-check">
-                        <input type="checkbox" name="remember" class="form-check-input" id="remember">
-                        <label class="form-check-label" for="remember">@lang('site.auth.remember')</label>
+                    <div class="d-flex align-items-center justify-content-between gap-2 mb-4">
+                        <div class="form-check mb-0">
+                            <input type="checkbox" name="remember" class="form-check-input" id="remember">
+                            <label class="form-check-label" for="remember">@lang('site.auth.remember')</label>
+                        </div>
+
+                        {{-- Beside the password field, where someone realises
+                             they have forgotten it. --}}
+                        <a href="{{ route('password.request') }}" class="small text-decoration-none">
+                            Forgotten your password?
+                        </a>
                     </div>
 
                     <button type="submit" class="btn btn-success btn-lg w-100 rounded-pill">
