@@ -157,10 +157,30 @@ class OrderController extends Controller
             return back()->with('error', 'Only finished orders can be cleared from your list.');
         }
 
+        $number = $order->order_number;
+
+        // Cancelled and never paid for, and now the customer has said they
+        // do not want to see it either — there is nothing left worth keeping.
+        // Hiding it instead would leave the shop's order list and database
+        // filling up with abandoned checkouts, one row at a time, with no way
+        // to tell them apart from real history.
+        if ($order->tookNoMoney()) {
+            DB::transaction(function () use ($order) {
+                $order->allItems()->forceDelete();
+                $order->payment()?->delete();
+                $order->delete();
+            });
+
+            return redirect()->route('orders.index')
+                ->with('success', 'Order '.$number.' was removed.');
+        }
+
+        // Anything that took money stays on the record; the customer just
+        // stops seeing it.
         $order->update(['hidden_at' => now()]);
 
         return redirect()->route('orders.index')
-            ->with('success', 'Order '.$order->order_number.' was removed from your list.');
+            ->with('success', 'Order '.$number.' was removed from your list.');
     }
 
     /**

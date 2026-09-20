@@ -211,6 +211,20 @@ class Order extends Model
         return in_array($this->status, ['Delivered', 'Cancelled'], true);
     }
 
+    /**
+     * Did this order ever take money?
+     *
+     * A cancelled order that was never marked paid took none: KHQR would have
+     * had to reach Paid, and cash on delivery only changes hands on delivery,
+     * which a cancelled order never reached. Nothing in it is evidence of
+     * anything, so nothing is lost by throwing it away.
+     */
+    public function tookNoMoney(): bool
+    {
+        return $this->status === 'Cancelled'
+            && ! $this->payment()->where('status', Payment::STATUS_PAID)->exists();
+    }
+
     public function formattedPhone(): ?string
     {
         return Cambodia::formatPhone($this->phone);

@@ -259,7 +259,10 @@ class CancelOwnOrderTest extends TestCase
 
     public function test_a_finished_order_can_be_cleared_from_the_customers_list(): void
     {
-        $order = $this->order(['status' => 'Cancelled']);
+        // Delivered, so money changed hands: clearing it hides it and no more.
+        // A cancelled order that never took money is deleted instead — see
+        // test_clearing_an_unpaid_cancelled_order_deletes_it.
+        $order = $this->order(['status' => 'Delivered']);
 
         $this->actingAs($this->user)
             ->post(route('orders.hide', $order))
@@ -272,7 +275,7 @@ class CancelOwnOrderTest extends TestCase
         $page->assertDontSee(route('orders.show', $order), false);
 
         // ...but the shop still has it, with its takings and its history.
-        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'Cancelled']);
+        $this->assertDatabaseHas('orders', ['id' => $order->id, 'status' => 'Delivered']);
         $this->assertNotNull($order->fresh()->hidden_at);
     }
 
@@ -368,5 +371,41 @@ class CancelOwnOrderTest extends TestCase
             ->get('/orders')
             ->assertOk()
             ->assertDontSee('waiting for payment');
+    }
+
+    public function test_clearing_an_unpaid_cancelled_order_deletes_it(): void
+    {
+        // The spam shape: a hundred people start a KHQR checkout, never pay,
+        // cancel, then clear it. Hiding each one leaves the shop's list and
+        // the database filling up with rows that mean nothing.
+        $order = $this->order(['status' => 'Cancelled']);
+        $order->payment()->update(['status' => Payment::STATUS_CANCELLED]);
+
+        $itemIds = $order->allItems()->pluck('id');
+        $this->assertNotEmpty($itemIds);
+
+        $this->actingAs($order->user)
+            ->post(route('orders.hide', $order))
+            ->assertRedirect(route('orders.index'));
+
+        $this->assertDatabaseMissing('orders', ['id' => $order->id]);
+        $this->assertDatabaseMissing('payments', ['order_id' => $order->id]);
+
+        foreach ($itemIds as $id) {
+            $this->assertDatabaseMissing('order_items', ['id' => $id]);
+        }
+    }
+
+    public function test_an_order_that_took_money_is_only_hidden(): void
+    {
+        // Paid then cancelled is a refund, and a refund is exactly the thing
+        // someone disputes later. The record stays.
+        $order = $this->order(['status' => 'Cancelled']);
+        $order->payment()->update(['status' => Payment::STATUS_PAID]);
+
+        $this->actingAs($order->user)->post(route('orders.hide', $order));
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id]);
+        $this->assertNotNull($order->fresh()->hidden_at);
     }
 }
