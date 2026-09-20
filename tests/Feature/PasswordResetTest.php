@@ -7,6 +7,7 @@ use App\Notifications\QueuedResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
 
 class PasswordResetTest extends TestCase
@@ -106,5 +107,42 @@ class PasswordResetTest extends TestCase
         }
 
         $response->assertStatus(429);
+    }
+
+    public function test_the_link_works_even_when_already_signed_in(): void
+    {
+        // The link arrives by email and gets opened wherever the person is,
+        // often on a phone already signed in. While these routes were
+        // guest-only they bounced to the home page with no explanation.
+        Notification::fake();
+
+        $user = User::factory()->create(['role' => 'customer']);
+        $token = Password::createToken($user);
+
+        $this->actingAs($user)
+            ->get(route('password.reset', ['token' => $token, 'email' => $user->email]))
+            ->assertOk()
+            ->assertSee('Choose a new password');
+
+        // Opening it signed them out, which is what choosing a new password
+        // means anyway.
+        $this->assertGuest();
+    }
+
+    public function test_someone_signed_in_can_finish_the_reset(): void
+    {
+        $user = User::factory()->create(['role' => 'customer']);
+        $token = Password::createToken($user);
+
+        $this->actingAs($user)->get(route('password.reset', ['token' => $token, 'email' => $user->email]));
+
+        $this->post('/reset-password', [
+            'token' => $token,
+            'email' => $user->email,
+            'password' => 'chosen-while-signed-in',
+            'password_confirmation' => 'chosen-while-signed-in',
+        ])->assertRedirect(route('login'));
+
+        $this->assertTrue(Hash::check('chosen-while-signed-in', $user->fresh()->password));
     }
 }

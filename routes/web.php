@@ -69,13 +69,11 @@ Route::middleware('guest')->group(function () {
         Route::post('/login', [AuthController::class, 'login']);
     });
 
-    // Forgotten passwords. Throttled the same as the credential forms: the
-    // request form is also a way to probe which addresses have accounts.
+    // Asking for a link. Throttled the same as the credential forms: this is
+    // also a way to probe which addresses have accounts.
     Route::middleware('throttle:5,1')->group(function () {
         Route::get('/forgot-password', [PasswordResetController::class, 'showRequest'])->name('password.request');
         Route::post('/forgot-password', [PasswordResetController::class, 'sendLink'])->name('password.email');
-        Route::get('/reset-password/{token}', [PasswordResetController::class, 'showReset'])->name('password.reset');
-        Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
     });
 
     // Sign in with Google
@@ -83,6 +81,15 @@ Route::middleware('guest')->group(function () {
         Route::get('/auth/google', [GoogleController::class, 'redirect'])->name('auth.google');
         Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('auth.google.callback');
     });
+});
+
+// Following the link from the email. Deliberately NOT guest-only: the link
+// arrives by email and gets opened wherever the person happens to be, often on
+// a phone already signed in. Bouncing them to the home page with no
+// explanation is how a forgotten password becomes a dead end.
+Route::middleware('throttle:5,1')->group(function () {
+    Route::get('/reset-password/{token}', [PasswordResetController::class, 'showReset'])->name('password.reset');
+    Route::post('/reset-password', [PasswordResetController::class, 'reset'])->name('password.update');
 });
 
 // Confirming an email address. Signed in but not yet confirmed still reaches

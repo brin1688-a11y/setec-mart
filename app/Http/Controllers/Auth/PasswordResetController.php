@@ -46,6 +46,12 @@ class PasswordResetController extends Controller
 
     public function showReset(Request $request, string $token)
     {
+        // Whoever is signed in on this device is not necessarily whose
+        // password is being reset, and they are about to stop being signed in
+        // anyway. Clearing the session first also means the form is reachable
+        // at all, which it was not while these routes were guest-only.
+        $this->endAnySession($request);
+
         return view('auth.reset-password', [
             'token' => $token,
             'email' => $request->query('email'),
@@ -80,6 +86,17 @@ class PasswordResetController extends Controller
 
         return redirect()->route('login')
             ->with('success', 'Your password has been changed. Please sign in.');
+    }
+
+    protected function endAnySession(Request $request): void
+    {
+        if (! auth()->check()) {
+            return;
+        }
+
+        auth()->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
     }
 
     protected function sameAnswer(): string
