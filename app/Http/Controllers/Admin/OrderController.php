@@ -45,6 +45,12 @@ class OrderController extends Controller
 
         $orders = Order::with(['user', 'payment', 'items'])
             ->when($status, fn ($q) => $q->where('status', $status))
+            // With no status picked this is the working list — what still
+            // needs doing. An order the customer called off needs nothing
+            // done, and leaving them mixed in buries the ones that do. The
+            // Cancelled tab still holds them: a customer who disputes a
+            // charge is why they are kept rather than deleted.
+            ->when(! $status, fn ($q) => $q->whereNotIn('status', self::DEAD_STATUSES))
             ->when($search !== '', function ($q) use ($search) {
                 // Whatever the shop has to hand: the reference the customer
                 // read out, their name, or the phone the order came from.
@@ -80,7 +86,8 @@ class OrderController extends Controller
             ->groupBy('status')
             ->pluck('total', 'status');
 
-        $counts = ['' => (int) $byStatus->sum()];
+        // The unfiltered tab counts what it actually lists.
+        $counts = ['' => (int) $byStatus->except(self::DEAD_STATUSES)->sum()];
 
         foreach (Order::STATUSES as $status) {
             $counts[$status] = (int) ($byStatus[$status] ?? 0);

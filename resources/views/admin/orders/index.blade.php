@@ -51,7 +51,7 @@
     {{-- Tabs, not a dropdown: the counts are the point, and they are only
          useful if you can see them without opening anything. --}}
     <div class="o-tabs mb-3">
-        @foreach(array_merge(['' => 'All'], array_combine(\App\Models\Order::STATUSES, \App\Models\Order::STATUSES)) as $key => $label)
+        @foreach(array_merge(['' => 'Active'], array_combine(\App\Models\Order::STATUSES, \App\Models\Order::STATUSES)) as $key => $label)
             <a class="o-tab {{ (string) $status === (string) $key ? 'is-on' : '' }}"
                href="{{ route('admin.orders.index', array_filter(['status' => $key, 'q' => $search ?: null])) }}">
                 {{ $label }}

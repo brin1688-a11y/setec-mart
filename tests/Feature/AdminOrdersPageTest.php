@@ -100,11 +100,42 @@ class AdminOrdersPageTest extends TestCase
 
         $counts = $page->viewData('counts');
 
-        $this->assertSame(4, $counts['']);
+        // The unfiltered tab counts what it lists, and it does not list
+        // cancelled orders — so three, not four.
+        $this->assertSame(3, $counts['']);
         $this->assertSame(1, $counts['Pending']);
         $this->assertSame(2, $counts['Confirmed']);
         $this->assertSame(1, $counts['Cancelled']);
         $this->assertSame(0, $counts['Delivered']);
+    }
+
+    public function test_a_cancelled_order_is_kept_out_of_the_working_list(): void
+    {
+        $live = $this->order(['status' => 'Pending']);
+        $this->order(['status' => 'Cancelled']);
+
+        // Nothing is waiting to be done on an order the customer called off,
+        // so it does not belong among the ones that are.
+        $page = $this->actingAs($this->admin)->get('/admin/orders')->assertOk();
+
+        $this->assertCount(1, $page->viewData('orders'));
+        $this->assertSame($live->id, $page->viewData('orders')->first()->id);
+    }
+
+    public function test_a_cancelled_order_is_still_reachable_on_its_own_tab(): void
+    {
+        // Kept, not deleted: a customer who disputes a charge is the reason.
+        $cancelled = $this->order(['status' => 'Cancelled']);
+        $this->order(['status' => 'Pending']);
+
+        $page = $this->actingAs($this->admin)->get('/admin/orders?status=Cancelled')->assertOk();
+
+        $this->assertCount(1, $page->viewData('orders'));
+        $this->assertSame($cancelled->id, $page->viewData('orders')->first()->id);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.orders.show', $cancelled))
+            ->assertOk();
     }
 
     public function test_a_status_filter_narrows_the_list(): void
