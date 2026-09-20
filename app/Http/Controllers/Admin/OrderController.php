@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Payment;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -72,7 +74,46 @@ class OrderController extends Controller
             'search' => $search,
             'counts' => $this->counts(),
             'today' => $this->todayAtAGlance(),
+            'removableCancelled' => $this->removableCancelled()->count(),
         ]);
+    }
+
+    /**
+     * The same clearing, for every cancelled order at once.
+     *
+     * Doing it a row at a time is fine for four and hopeless for four
+     * hundred, which is the number a run of abandoned checkouts produces.
+     */
+    public function purgeCancelled()
+    {
+        $ids = $this->removableCancelled()->pluck('id');
+
+        if ($ids->isEmpty()) {
+            return back()->with('error', 'There is nothing to remove.');
+        }
+
+        DB::transaction(function () use ($ids) {
+            // Deleted per table rather than per order: one statement each,
+            // however many orders there are.
+            OrderItem::withTrashed()->whereIn('order_id', $ids)->forceDelete();
+            Payment::whereIn('order_id', $ids)->delete();
+            Order::whereIn('id', $ids)->delete();
+        });
+
+        return redirect()
+            ->route('admin.orders.index', ['status' => 'Cancelled'])
+            ->with('success', $ids->count().' cancelled '.str('order')->plural($ids->count()).' removed.');
+    }
+
+    /**
+     * Cancelled orders that never took a payment — the ones safe to delete.
+     *
+     * @return Builder<Order>
+     */
+    protected function removableCancelled()
+    {
+        return Order::whereIn('status', self::DEAD_STATUSES)
+            ->whereDoesntHave('payment', fn ($q) => $q->where('status', Payment::STATUS_PAID));
     }
 
     /**

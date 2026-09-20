@@ -50,14 +50,29 @@
 
     {{-- Tabs, not a dropdown: the counts are the point, and they are only
          useful if you can see them without opening anything. --}}
-    <div class="o-tabs mb-3">
-        @foreach(array_merge(['' => 'Active'], array_combine(\App\Models\Order::STATUSES, \App\Models\Order::STATUSES)) as $key => $label)
-            <a class="o-tab {{ (string) $status === (string) $key ? 'is-on' : '' }}"
-               href="{{ route('admin.orders.index', array_filter(['status' => $key, 'q' => $search ?: null])) }}">
-                {{ $label }}
-                <span class="o-tab-n">{{ $counts[$key] ?? 0 }}</span>
-            </a>
-        @endforeach
+    <div class="o-tabrow mb-3">
+        <div class="o-tabs">
+            @foreach(array_merge(['' => 'Active'], array_combine(\App\Models\Order::STATUSES, \App\Models\Order::STATUSES)) as $key => $label)
+                <a class="o-tab {{ (string) $status === (string) $key ? 'is-on' : '' }}"
+                   href="{{ route('admin.orders.index', array_filter(['status' => $key, 'q' => $search ?: null])) }}">
+                    {{ $label }}
+                    <span class="o-tab-n">{{ $counts[$key] ?? 0 }}</span>
+                </a>
+            @endforeach
+        </div>
+
+        {{-- Only on the tab it acts on, and only when there is something to
+             act on. The count is in the label so nobody presses it blind. --}}
+        @if($status === 'Cancelled' && $removableCancelled > 0)
+            <form method="POST" action="{{ route('admin.orders.purge-cancelled') }}"
+                  onsubmit="return confirm('Remove {{ $removableCancelled }} cancelled {{ \Illuminate\Support\Str::plural('order', $removableCancelled) }}? This cannot be undone.');">
+                @csrf
+                @method('DELETE')
+                <button type="submit" class="chip-btn o-remove">
+                    Remove all cancelled ({{ $removableCancelled }})
+                </button>
+            </form>
+        @endif
     </div>
 
     <div class="table-responsive">
@@ -182,6 +197,11 @@
 <style>
     .o-tile { display: block; text-decoration: none; transition: border-color .15s ease, transform .15s ease; }
     .o-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+    .o-tabrow {
+        display: flex; align-items: center; justify-content: space-between;
+        gap: 12px; flex-wrap: wrap;
+    }
 
     .o-remove { color: var(--bad); }
     .o-remove:hover { border-color: var(--bad); background: var(--bad-w); }

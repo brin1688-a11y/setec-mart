@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Category;
 use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Product;
 use App\Models\User;
@@ -326,16 +327,76 @@ class AdminOrdersPageTest extends TestCase
         $this->assertStringContainsString($removable->order_number, $html);
         $this->assertStringContainsString($refunded->order_number, $html);
 
-        // ...but only one carries a Remove button. Counting them rather than
-        // looking for a URL: destroy and show are the same path, told apart
-        // only by the method, so the Open link matches either way. The class
-        // is spelled with chip-btn so the stylesheet's own rules do not count.
-        $this->assertSame(1, substr_count($html, 'chip-btn o-remove'));
+        // ...and only one offers to remove itself. Checked by the confirm
+        // text, which names the order: destroy and show are the same path,
+        // told apart only by the method, so matching the URL would find the
+        // Open link on both rows.
+        $this->assertStringContainsString('Remove '.$removable->order_number.'?', $html);
+        $this->assertStringNotContainsString('Remove '.$refunded->order_number.'?', $html);
+    }
 
-        // And it is the one that took nothing.
-        $this->assertStringContainsString(
-            'Remove '.$removable->order_number.'?',
-            $html
-        );
+    public function test_every_removable_cancelled_order_goes_at_once(): void
+    {
+        $gone = collect(range(1, 3))->map(function () {
+            $o = $this->order(['status' => 'Cancelled']);
+            $o->payment->update(['status' => Payment::STATUS_CANCELLED]);
+
+            return $o;
+        });
+
+        $refunded = $this->order(['status' => 'Cancelled']);
+        $refunded->payment->update(['status' => Payment::STATUS_PAID]);
+
+        $live = $this->order(['status' => 'Confirmed']);
+
+        $this->actingAs($this->admin)
+            ->delete(route('admin.orders.purge-cancelled'))
+            ->assertRedirect(route('admin.orders.index', ['status' => 'Cancelled']))
+            ->assertSessionHas('success');
+
+        foreach ($gone as $order) {
+            $this->assertDatabaseMissing('orders', ['id' => $order->id]);
+            $this->assertDatabaseMissing('payments', ['order_id' => $order->id]);
+            $this->assertSame(0, OrderItem::withTrashed()->where('order_id', $order->id)->count());
+        }
+
+        // The refund and the live order are untouched.
+        $this->assertDatabaseHas('orders', ['id' => $refunded->id]);
+        $this->assertDatabaseHas('orders', ['id' => $live->id]);
+    }
+
+    public function test_purging_with_nothing_to_purge_says_so(): void
+    {
+        $this->order(['status' => 'Confirmed']);
+
+        $this->actingAs($this->admin)
+            ->delete(route('admin.orders.purge-cancelled'))
+            ->assertSessionHas('error');
+    }
+
+    public function test_a_customer_cannot_purge(): void
+    {
+        $order = $this->order(['status' => 'Cancelled']);
+
+        $this->actingAs(User::factory()->create(['role' => 'customer']))
+            ->delete(route('admin.orders.purge-cancelled'))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id]);
+    }
+
+    public function test_the_bulk_button_appears_only_on_the_cancelled_tab(): void
+    {
+        $order = $this->order(['status' => 'Cancelled']);
+        $order->payment->update(['status' => Payment::STATUS_CANCELLED]);
+
+        $this->actingAs($this->admin)->get('/admin/orders')
+            ->assertDontSee('Remove all cancelled');
+
+        $this->actingAs($this->admin)->get('/admin/orders?status=Pending')
+            ->assertDontSee('Remove all cancelled');
+
+        $this->actingAs($this->admin)->get('/admin/orders?status=Cancelled')
+            ->assertSee('Remove all cancelled (1)');
     }
 }
