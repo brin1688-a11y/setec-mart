@@ -256,4 +256,86 @@ class AdminOrdersPageTest extends TestCase
             ->get('/admin/orders')
             ->assertForbidden();
     }
+
+    public function test_the_shop_can_remove_a_cancelled_order_that_took_no_money(): void
+    {
+        $order = $this->order(['status' => 'Cancelled']);
+        $order->payment->update(['status' => Payment::STATUS_CANCELLED]);
+
+        $itemIds = $order->allItems()->pluck('id');
+
+        $this->actingAs($this->admin)
+            ->delete(route('admin.orders.destroy', $order))
+            ->assertRedirect(route('admin.orders.index', ['status' => 'Cancelled']))
+            ->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('orders', ['id' => $order->id]);
+        $this->assertDatabaseMissing('payments', ['order_id' => $order->id]);
+
+        foreach ($itemIds as $id) {
+            $this->assertDatabaseMissing('order_items', ['id' => $id]);
+        }
+    }
+
+    public function test_an_order_that_took_money_is_refused(): void
+    {
+        // Paid then cancelled is a refund — the record most likely to be
+        // asked about later.
+        $order = $this->order(['status' => 'Cancelled']);
+        $order->payment->update(['status' => Payment::STATUS_PAID]);
+
+        $this->actingAs($this->admin)
+            ->delete(route('admin.orders.destroy', $order))
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id]);
+    }
+
+    public function test_a_live_order_cannot_be_removed(): void
+    {
+        $order = $this->order(['status' => 'Confirmed']);
+
+        $this->actingAs($this->admin)->delete(route('admin.orders.destroy', $order));
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id]);
+    }
+
+    public function test_a_customer_cannot_remove_an_order(): void
+    {
+        $order = $this->order(['status' => 'Cancelled']);
+
+        $this->actingAs(User::factory()->create(['role' => 'customer']))
+            ->delete(route('admin.orders.destroy', $order))
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('orders', ['id' => $order->id]);
+    }
+
+    public function test_the_button_shows_only_where_removing_is_allowed(): void
+    {
+        $removable = $this->order(['status' => 'Cancelled']);
+        $removable->payment->update(['status' => Payment::STATUS_CANCELLED]);
+
+        $refunded = $this->order(['status' => 'Cancelled']);
+        $refunded->payment->update(['status' => Payment::STATUS_PAID]);
+
+        $html = $this->actingAs($this->admin)
+            ->get('/admin/orders?status=Cancelled')->assertOk()->getContent();
+
+        // Both rows are listed...
+        $this->assertStringContainsString($removable->order_number, $html);
+        $this->assertStringContainsString($refunded->order_number, $html);
+
+        // ...but only one carries a Remove button. Counting them rather than
+        // looking for a URL: destroy and show are the same path, told apart
+        // only by the method, so the Open link matches either way. The class
+        // is spelled with chip-btn so the stylesheet's own rules do not count.
+        $this->assertSame(1, substr_count($html, 'chip-btn o-remove'));
+
+        // And it is the one that took nothing.
+        $this->assertStringContainsString(
+            'Remove '.$removable->order_number.'?',
+            $html
+        );
+    }
 }

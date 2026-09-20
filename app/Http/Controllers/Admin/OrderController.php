@@ -76,6 +76,34 @@ class OrderController extends Controller
     }
 
     /**
+     * Clear a cancelled order off the books.
+     *
+     * Only ones that never took money: the customer side deletes those for
+     * itself, and this is the shop doing the same tidying without waiting for
+     * them. An order that was paid and then cancelled is a refund, which is
+     * the record most likely to be asked about later, so it stays.
+     */
+    public function destroy(Order $order)
+    {
+        if (! $order->tookNoMoney()) {
+            return back()->with('error',
+                'Order '.$order->order_number.' took a payment, so its record is kept.');
+        }
+
+        $number = $order->order_number;
+
+        DB::transaction(function () use ($order) {
+            $order->allItems()->forceDelete();
+            $order->payment()?->delete();
+            $order->delete();
+        });
+
+        return redirect()
+            ->route('admin.orders.index', ['status' => 'Cancelled'])
+            ->with('success', 'Order '.$number.' was removed.');
+    }
+
+    /**
      * How many orders sit at each step, for the filter tabs.
      *
      * @return array<string, int>

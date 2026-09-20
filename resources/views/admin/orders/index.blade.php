@@ -137,6 +137,19 @@
                                     </form>
                                 @endif
                                 <a href="{{ route('admin.orders.show', $order) }}" class="chip-btn">Open</a>
+
+                                {{-- Only where there is nothing to lose: a
+                                     cancelled order that never took a payment.
+                                     One that did is a refund, and that is the
+                                     record someone asks about later. --}}
+                                @if($order->tookNoMoney())
+                                    <form method="POST" action="{{ route('admin.orders.destroy', $order) }}"
+                                          onsubmit="return confirm('Remove {{ $order->order_number }}? This cannot be undone.');">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="chip-btn o-remove">Remove</button>
+                                    </form>
+                                @endif
                             </div>
                         </td>
                     </tr>
@@ -169,6 +182,9 @@
 <style>
     .o-tile { display: block; text-decoration: none; transition: border-color .15s ease, transform .15s ease; }
     .o-tile:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+    .o-remove { color: var(--bad); }
+    .o-remove:hover { border-color: var(--bad); background: var(--bad-w); }
 
     .o-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 
